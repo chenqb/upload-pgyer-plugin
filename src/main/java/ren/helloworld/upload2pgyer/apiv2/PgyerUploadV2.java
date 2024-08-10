@@ -3,7 +3,9 @@ package ren.helloworld.upload2pgyer.apiv2;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import hudson.EnvVars;
+import hudson.FilePath;
 import okhttp3.*;
+import org.apache.commons.io.IOUtils;
 import ren.helloworld.upload2pgyer.helper.CommonUtil;
 import ren.helloworld.upload2pgyer.helper.ProgressRequestBody;
 import ren.helloworld.upload2pgyer.impl.Message;
@@ -11,8 +13,9 @@ import ren.helloworld.upload2pgyer.impl.Message;
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -33,7 +36,7 @@ public class PgyerUploadV2 {
         if (paramsBeanV2 == null) {
             return;
         }
-        upload2Pgyer(null, false, paramsBeanV2, listener);
+//        upload2Pgyer(null, false, paramsBeanV2, listener);
     }
 
     /**
@@ -83,11 +86,11 @@ public class PgyerUploadV2 {
         paramsBeanV2.setApiKey(maps.get("-apiKey"));
         paramsBeanV2.setScandir(maps.get("-scanDir"));
         paramsBeanV2.setWildcard(maps.get("-wildcard"));
-        paramsBeanV2.setBuildType(maps.containsKey("-buildType") ? maps.get("-buildType") : "");
-        paramsBeanV2.setBuildPassword(maps.containsKey("-buildPassword") ? maps.get("-buildPassword") : "");
-        paramsBeanV2.setBuildInstallType(maps.containsKey("-buildInstallType") ? maps.get("-buildInstallType") : "1");
-        paramsBeanV2.setBuildUpdateDescription(maps.containsKey("-buildUpdateDescription") ? maps.get("-buildUpdateDescription") : "");
-        paramsBeanV2.setBuildChannelShortcut(maps.containsKey("-buildChannelShortcut") ? maps.get("-buildChannelShortcut") : "");
+        paramsBeanV2.setBuildType(maps.getOrDefault("-buildType", ""));
+        paramsBeanV2.setBuildPassword(maps.getOrDefault("-buildPassword", ""));
+        paramsBeanV2.setBuildInstallType(maps.getOrDefault("-buildInstallType", "1"));
+        paramsBeanV2.setBuildUpdateDescription(maps.getOrDefault("-buildUpdateDescription", ""));
+        paramsBeanV2.setBuildChannelShortcut(maps.getOrDefault("-buildChannelShortcut", ""));
         return paramsBeanV2;
     }
 
@@ -100,14 +103,14 @@ public class PgyerUploadV2 {
      * @param listener     listener
      * @return pgyer bean
      */
-    public static PgyerBeanV2 upload2Pgyer(EnvVars envVars, boolean printHeader, ParamsBeanV2 paramsBeanV2, Message listener) {
+    public static PgyerBeanV2 upload2Pgyer(FilePath workspace, EnvVars envVars, boolean printHeader, ParamsBeanV2 paramsBeanV2, Message listener) throws IOException, InterruptedException {
         // print header info
         if (printHeader) {
             CommonUtil.printHeaderInfo(listener);
         }
 
         // find upload file
-        paramsBeanV2.setUploadFile(CommonUtil.findFile(paramsBeanV2.getScandir(), paramsBeanV2.getWildcard(), listener));
+        paramsBeanV2.setUploadFile(CommonUtil.findFile(workspace, paramsBeanV2.getScandir(), paramsBeanV2.getWildcard(), listener));
 
         // check upload file
         if (paramsBeanV2.getUploadFile() == null) {
@@ -115,8 +118,8 @@ public class PgyerUploadV2 {
             return null;
         }
 
-        File uploadFile = new File(paramsBeanV2.getUploadFile());
-        if (!uploadFile.exists() || !uploadFile.isFile()) {
+        FilePath uploadFile = paramsBeanV2.getUploadFile();
+        if (!uploadFile.exists()) {
             CommonUtil.printMessage(listener, true, "The uploaded file was not found，plase check scandir or wildcard!\n");
             return null;
         }
@@ -203,10 +206,10 @@ public class PgyerUploadV2 {
      * @param listener     listener
      * @return pgyer bean
      */
-    public static PgyerBeanV2 upload2PgyerFile(EnvVars envVars,  ParamsBeanV2 paramsBeanV2, PgyerTokenBeanV2 tokenBean, Message listener) {
+    public static PgyerBeanV2 upload2PgyerFile(EnvVars envVars,  ParamsBeanV2 paramsBeanV2, PgyerTokenBeanV2 tokenBean, Message listener) throws IOException, InterruptedException {
 
         // find upload file
-        paramsBeanV2.setUploadFile(CommonUtil.findFile(paramsBeanV2.getScandir(), paramsBeanV2.getWildcard(), listener));
+//        paramsBeanV2.setUploadFile(CommonUtil.findFile(paramsBeanV2.getScandir(), paramsBeanV2.getWildcard(), listener));
 
         // check upload file
         if (paramsBeanV2.getUploadFile() == null) {
@@ -214,19 +217,21 @@ public class PgyerUploadV2 {
             return null;
         }
 
-        File uploadFile = new File(paramsBeanV2.getUploadFile());
-        if (!uploadFile.exists() || !uploadFile.isFile()) {
+        FilePath uploadFile = paramsBeanV2.getUploadFile();
+        if (!uploadFile.exists()) {
             CommonUtil.printMessage(listener, true, "The uploaded file was not found，plase check scandir or wildcard!\n");
             return null;
         }
 
         String result = "";
         try {
-            CommonUtil.printMessage(listener, true, "upload：" + uploadFile.getName() + " to Pgyer");
+            CommonUtil.printMessage(listener, true, "upload file location: " + uploadFile.getRemote());
             CommonUtil.printMessage(listener, true, "upload file size: " + CommonUtil.convertFileSize(uploadFile.length()));
 
             MediaType type = MediaType.parse("application/octet-stream");
-            RequestBody fileBody = RequestBody.create(type, uploadFile);
+            InputStream is = uploadFile.read();
+            byte[] bytes = IOUtils.toByteArray(is);
+            RequestBody fileBody = RequestBody.create(bytes, type);
             RequestBody requestBody = new MultipartBody.Builder()
                     .setType(MultipartBody.FORM)
                     .addFormDataPart("key", tokenBean.getData().getKey())
@@ -379,26 +384,26 @@ public class PgyerUploadV2 {
      */
     private static void printResultInfo(PgyerBeanV2 pgyerBeanV2, Message listener) {
         PgyerBeanV2.DataBean data = pgyerBeanV2.getData();
-        CommonUtil.printMessage(listener, true, "应用名称：" + data.getBuildName());
-        CommonUtil.printMessage(listener, true, "应用类型：" + data.getBuildType());
-        CommonUtil.printMessage(listener, true, "版本号：" + data.getBuildVersion());
-        CommonUtil.printMessage(listener, true, "build号：" + data.getBuildBuildVersion());
+//        CommonUtil.printMessage(listener, true, "应用名称：" + data.getBuildName());
+//        CommonUtil.printMessage(listener, true, "应用类型：" + data.getBuildType());
+        CommonUtil.printMessage(listener, true, "App Version：" + data.getBuildVersion());
+//        CommonUtil.printMessage(listener, true, "build号：" + data.getBuildBuildVersion());
         CommonUtil.printMessage(listener, true, "Build Key：" + data.getBuildKey());
-        CommonUtil.printMessage(listener, true, "版本编号：" + data.getBuildVersionNo());
-        CommonUtil.printMessage(listener, true, "文件大小：" + data.getBuildFileSize());
-        CommonUtil.printMessage(listener, true, "应用介绍：" + data.getBuildDescription());
-        CommonUtil.printMessage(listener, true, "应用主页：" + data.getAppPgyerURL());
-        CommonUtil.printMessage(listener, true, "应用短链接：" + data.getBuildShortcutUrl());
-        CommonUtil.printMessage(listener, true, "应用上传时间：" + data.getBuildCreated());
-        CommonUtil.printMessage(listener, true, "应用更新时间：" + data.getBuildUpdated());
-        CommonUtil.printMessage(listener, true, "应用构建主页：" + data.getAppBuildURL());
-        CommonUtil.printMessage(listener, true, "应用更新说明：" + data.getBuildUpdateDescription());
-        CommonUtil.printMessage(listener, true, "是否是最新版：" + data.getBuildIsLastest());
-        CommonUtil.printMessage(listener, true, "应用程序包名：" + data.getBuildIdentifier());
-        CommonUtil.printMessage(listener, true, "应用截图的key：" + data.getBuildScreenshots());
-        CommonUtil.printMessage(listener, true, "应用二维码地址：" + data.getBuildQRCodeURL());
-        CommonUtil.printMessage(listener, true, "是否是第一个App：" + data.getBuildType());
-        CommonUtil.printMessage(listener, true, "应用的Icon图标key：" + data.getBuildIcon());
+        CommonUtil.printMessage(listener, true, "Build Number：" + data.getBuildVersionNo());
+//        CommonUtil.printMessage(listener, true, "文件大小：" + data.getBuildFileSize());
+//        CommonUtil.printMessage(listener, true, "应用介绍：" + data.getBuildDescription());
+//        CommonUtil.printMessage(listener, true, "应用主页：" + data.getAppPgyerURL());
+//        CommonUtil.printMessage(listener, true, "应用短链接：" + data.getBuildShortcutUrl());
+//        CommonUtil.printMessage(listener, true, "应用上传时间：" + data.getBuildCreated());
+//        CommonUtil.printMessage(listener, true, "应用更新时间：" + data.getBuildUpdated());
+        CommonUtil.printMessage(listener, true, "Build URL：" + data.getAppBuildURL());
+        CommonUtil.printMessage(listener, true, "Build Update Desc：" + data.getBuildUpdateDescription());
+//        CommonUtil.printMessage(listener, true, "是否是最新版：" + data.getBuildIsLastest());
+//        CommonUtil.printMessage(listener, true, "应用程序包名：" + data.getBuildIdentifier());
+//        CommonUtil.printMessage(listener, true, "应用截图的key：" + data.getBuildScreenshots());
+        CommonUtil.printMessage(listener, true, "Build QRCode URL：" + data.getBuildQRCodeURL());
+//        CommonUtil.printMessage(listener, true, "是否是第一个App：" + data.getBuildType());
+//        CommonUtil.printMessage(listener, true, "应用的Icon图标key：" + data.getBuildIcon());
         CommonUtil.printMessage(listener, false, "");
     }
 }

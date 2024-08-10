@@ -4,6 +4,8 @@ import hudson.EnvVars;
 import hudson.model.AbstractBuild;
 import hudson.model.EnvironmentContributingAction;
 import hudson.model.InvisibleAction;
+import hudson.model.Run;
+import org.jetbrains.annotations.NotNull;
 
 public class PublishEnvVarAction extends InvisibleAction implements EnvironmentContributingAction {
     /**
@@ -29,8 +31,15 @@ public class PublishEnvVarAction extends InvisibleAction implements EnvironmentC
 
     /* (non-Javadoc)
      * @see hudson.model.EnvironmentContributingAction#buildEnvVars(hudson.model.AbstractBuild, hudson.EnvVars)
-     */
+
     public void buildEnvVars(AbstractBuild<?, ?> build, EnvVars env) {
+        env.put(key, value);
+    }
+     */
+
+    @Override
+    public void buildEnvironment(@NotNull Run<?, ?> run, @NotNull EnvVars env) {
+//        EnvironmentContributingAction.super.buildEnvironment(run, env);
         env.put(key, value);
     }
 }

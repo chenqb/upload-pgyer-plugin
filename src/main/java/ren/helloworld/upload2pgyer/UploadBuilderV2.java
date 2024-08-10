@@ -1,20 +1,21 @@
 package ren.helloworld.upload2pgyer;
 
 import hudson.Extension;
+import hudson.FilePath;
 import hudson.Launcher;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
-import hudson.model.BuildListener;
+import hudson.model.*;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 import hudson.util.FormValidation;
 import hudson.util.Secret;
+import jenkins.tasks.SimpleBuildStep;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 import ren.helloworld.upload2pgyer.apiv2.ParamsBeanV2;
 import ren.helloworld.upload2pgyer.helper.PgyerV2Helper;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 
 /**
@@ -22,7 +23,7 @@ import java.io.IOException;
  *
  * @author myroid
  */
-public class UploadBuilderV2 extends Builder {
+public class UploadBuilderV2 extends Builder implements SimpleBuildStep {
 
     private final Secret apiKey;
     private final String scanDir;
@@ -80,7 +81,8 @@ public class UploadBuilderV2 extends Builder {
 
 
     @Override
-    public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
+    public void perform(@Nonnull Run<?, ?> run, @Nonnull FilePath workspace, @Nonnull Launcher launcher,
+                        @Nonnull TaskListener listener) throws InterruptedException, IOException {
         ParamsBeanV2 paramsBeanV2 = new ParamsBeanV2();
         paramsBeanV2.setApiKey(apiKey.getPlainText());
         paramsBeanV2.setScandir(scanDir);
@@ -90,7 +92,7 @@ public class UploadBuilderV2 extends Builder {
         paramsBeanV2.setBuildUpdateDescription(buildUpdateDescription);
         paramsBeanV2.setBuildType(buildType);
         paramsBeanV2.setBuildChannelShortcut(buildChannelShortcut);
-        return PgyerV2Helper.upload(build, listener, paramsBeanV2);
+        PgyerV2Helper.upload(run, workspace, listener, paramsBeanV2);
     }
 
     @Override

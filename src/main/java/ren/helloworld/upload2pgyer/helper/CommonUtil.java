@@ -1,8 +1,10 @@
 package ren.helloworld.upload2pgyer.helper;
 
 import hudson.EnvVars;
+import hudson.FilePath;
 import hudson.model.AbstractBuild;
 import hudson.model.Result;
+import hudson.model.Run;
 import org.apache.tools.ant.DirectoryScanner;
 import ren.helloworld.upload2pgyer.impl.Message;
 
@@ -99,13 +101,13 @@ public class CommonUtil {
     /**
      * check build result
      *
-     * @param build   build
+     * @param run   run
      * @param message message
      * @return failed
      */
-    public static boolean isBuildFailed(AbstractBuild<?, ?> build, Message message) {
+    public static boolean isBuildFailed(Run<?, ?> run, Message message) {
         // check build result
-        Result result = build.getResult();
+        Result result = run.getResult();
         boolean unStable = result != null && result.isWorseThan(Result.UNSTABLE);
         if (unStable) {
             message.message(true, "The build " + result.toString() + ", so the file was not uploaded.");
@@ -121,14 +123,17 @@ public class CommonUtil {
      * @param listener listener
      * @return file path
      */
-    public static String findFile(String scandir, String wildcard, Message listener) {
-        File dir = new File(scandir);
+    public static FilePath findFile(FilePath workspace, String scandir, String wildcard, Message listener) throws IOException, InterruptedException {
+        FilePath dir = new FilePath(workspace, scandir);
         if (!dir.exists() || !dir.isDirectory()) {
-            CommonUtil.printMessage(listener, true, "scan dir:" + dir.getAbsolutePath());
-            CommonUtil.printMessage(listener, true, "scan dir isn't exist or it's not a directory!");
+            CommonUtil.printMessage(listener, true, "scan dir:" + dir.getRemote());
+            CommonUtil.printMessage(listener, true, "dir exist?: " + dir.exists());
+            CommonUtil.printMessage(listener, true, "dir isDirectory?: " + dir.isDirectory());
+            CommonUtil.printMessage(listener, true, "scan dir isn't exist or it's not a directory -- 130!");
             return null;
-        }
 
+        }
+        /**
         DirectoryScanner scanner = new DirectoryScanner();
         scanner.setBasedir(scandir);
         scanner.setIncludes(new String[]{wildcard});
@@ -149,6 +154,19 @@ public class CommonUtil {
         CommonUtil.printMessage(listener, true, "Found " + uploadFiles.length + " files, the default choice of the latest modified file!");
         CommonUtil.printMessage(listener, true, "The latest modified file is " + uploadFiltPath + "\n");
         return uploadFiltPath;
+         **/
+
+        FilePath[] fileLists = dir.list(wildcard);
+        if (fileLists.length==0) {
+            CommonUtil.printMessage(listener, true, "NO matched file found in :" + dir.getRemote());
+            return null;
+        }
+        if (fileLists.length>1) {
+            CommonUtil.printMessage(listener, true, "Multi matched files found in :" + dir.getRemote());
+        }
+        return dir.list(wildcard)[0];
+
+
     }
 
     /**

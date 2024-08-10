@@ -1,11 +1,13 @@
 package ren.helloworld.upload2pgyer.apiv2;
 
+import hudson.FilePath;
+
 public class ParamsBeanV2 {
     private String apiKey;
     // file start
     private String scandir;
     private String wildcard;
-    private String uploadFile;
+    private FilePath uploadFile;
     // file end
     private String buildInstallType;
     private String buildPassword;
@@ -38,11 +40,11 @@ public class ParamsBeanV2 {
         this.wildcard = wildcard;
     }
 
-    public String getUploadFile() {
+    public FilePath getUploadFile() {
         return uploadFile;
     }
 
-    public void setUploadFile(String uploadFile) {
+    public void setUploadFile(FilePath uploadFile) {
         this.uploadFile = uploadFile;
     }
 

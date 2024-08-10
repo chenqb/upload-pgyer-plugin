@@ -1,22 +1,23 @@
 package ren.helloworld.upload2pgyer;
 
 import hudson.Extension;
+import hudson.FilePath;
 import hudson.Launcher;
-import hudson.model.AbstractBuild;
-import hudson.model.AbstractProject;
-import hudson.model.BuildListener;
+import hudson.model.*;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.BuildStepMonitor;
 import hudson.tasks.Publisher;
 import hudson.tasks.Recorder;
 import hudson.util.FormValidation;
 import hudson.util.Secret;
+import jenkins.tasks.SimpleBuildStep;
 import org.jenkinsci.Symbol;
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.QueryParameter;
 import ren.helloworld.upload2pgyer.apiv2.ParamsBeanV2;
 import ren.helloworld.upload2pgyer.helper.PgyerV2Helper;
 
+import javax.annotation.Nonnull;
 import java.io.IOException;
 
 /**
@@ -24,7 +25,7 @@ import java.io.IOException;
  *
  * @author myroid
  */
-public class UploadPublisherV2 extends Recorder {
+public class UploadPublisherV2 extends Publisher implements SimpleBuildStep {
 
     private final Secret apiKey;
     private final String scanDir;
@@ -37,7 +38,7 @@ public class UploadPublisherV2 extends Recorder {
 
 
     @DataBoundConstructor
-    public UploadPublisherV2(String apiKey, String scanDir, String wildcard, String buildType, String buildInstallType, String buildPassword, String buildUpdateDescription, String buildChannelShortcut, String qrcodePath, String envVarsPath) {
+    public UploadPublisherV2(String apiKey, String scanDir, String wildcard, String buildType, String buildInstallType, String buildPassword, String buildUpdateDescription, String buildChannelShortcut) {
         this.apiKey = Secret.fromString(apiKey);
         this.scanDir = scanDir;
         this.wildcard = wildcard;
@@ -48,8 +49,8 @@ public class UploadPublisherV2 extends Recorder {
         this.buildChannelShortcut = buildChannelShortcut;
     }
 
-    public Secret getApiKey() {
-        return apiKey;
+    public String getApiKey() {
+        return apiKey.getPlainText();
     }
 
     public String getScanDir() {
@@ -64,8 +65,8 @@ public class UploadPublisherV2 extends Recorder {
         return buildInstallType;
     }
 
-    public Secret getBuildPassword() {
-        return buildPassword;
+    public String getBuildPassword() {
+        return buildPassword.getPlainText();
     }
 
     public String getBuildUpdateDescription() {
@@ -82,7 +83,8 @@ public class UploadPublisherV2 extends Recorder {
 
 
     @Override
-    public boolean perform(AbstractBuild<?, ?> build, Launcher launcher, BuildListener listener) throws InterruptedException, IOException {
+    public void perform(@Nonnull Run<?, ?> run, @Nonnull FilePath workspace, @Nonnull Launcher launcher,
+                        @Nonnull TaskListener listener) throws InterruptedException, IOException {
         ParamsBeanV2 paramsBeanV2 = new ParamsBeanV2();
         paramsBeanV2.setApiKey(apiKey.getPlainText());
         paramsBeanV2.setScandir(scanDir);
@@ -92,15 +94,20 @@ public class UploadPublisherV2 extends Recorder {
         paramsBeanV2.setBuildType(buildType);
         paramsBeanV2.setBuildUpdateDescription(buildUpdateDescription);
         paramsBeanV2.setBuildChannelShortcut(buildChannelShortcut);
-        return PgyerV2Helper.upload(build, listener, paramsBeanV2);
+        boolean result = PgyerV2Helper.upload(run, workspace, listener, paramsBeanV2);
+        if(!result){
+            throw new RuntimeException("UPLOAD TO PGYER  FAILED !!!");
+        }
+
+
     }
 
-    @Override
-    public DescriptorImpl getDescriptor() {
-        return (DescriptorImpl) super.getDescriptor();
-    }
+//    @Override
+//    public DescriptorImpl getDescriptor() {
+//        return (DescriptorImpl) super.getDescriptor();
+//    }
 
-    @Symbol("upload-pgyer-v2")
+    @Symbol("uploadPgyV2")
     @Extension
     public static final class DescriptorImpl extends BuildStepDescriptor<Publisher> {
         private String installType = "1";
@@ -139,7 +146,7 @@ public class UploadPublisherV2 extends Recorder {
         }
 
         public String getDisplayName() {
-            return "Upload to pgyer with apiV2";
+            return "Upload to pgyer with apiV2 publish";
         }
     }
 
