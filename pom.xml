@@ -15,7 +15,7 @@
 
     <groupId>ren.helloworld</groupId>
     <artifactId>upload-pgyer</artifactId>
-    <version>2.3-SNAPSHOT</version>
+    <version>2.3.1-SNAPSHOT</version>
     <packaging>hpi</packaging>
     <name>Upload to pgyer</name>
     <description>Upload to pgyer for jenkins plugin</description>

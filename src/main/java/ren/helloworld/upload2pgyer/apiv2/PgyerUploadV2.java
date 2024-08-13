@@ -221,57 +221,26 @@ public class PgyerUploadV2 {
         if (!uploadFile.exists()) {
             CommonUtil.printMessage(listener, true, "The uploaded file was not found，plase check scandir or wildcard!\n");
             return null;
+        } else {
+            CommonUtil.printMessage(listener, true, "upload file location: " + uploadFile.getRemote());
+            CommonUtil.printMessage(listener, true, "upload file size: " + CommonUtil.convertFileSize(uploadFile.length()));
         }
 
         String result = "";
-        try {
-            CommonUtil.printMessage(listener, true, "upload file location: " + uploadFile.getRemote());
-            CommonUtil.printMessage(listener, true, "upload file size: " + CommonUtil.convertFileSize(uploadFile.length()));
-
-            MediaType type = MediaType.parse("application/octet-stream");
-            InputStream is = uploadFile.read();
-            byte[] bytes = IOUtils.toByteArray(is);
-            RequestBody fileBody = RequestBody.create(bytes, type);
-            RequestBody requestBody = new MultipartBody.Builder()
-                    .setType(MultipartBody.FORM)
-                    .addFormDataPart("key", tokenBean.getData().getKey())
-                    .addFormDataPart("signature", tokenBean.getData().getParams().getSignature())
-                    .addFormDataPart("x-cos-security-token", tokenBean.getData().getParams().getX_cos_security_token())
-                    .addFormDataPart("file", uploadFile.getName(), fileBody)
-                    .build();
-            Request request = new Request.Builder()
-                    .url(tokenBean.getData().getEndpoint())
-                    .post(new ProgressRequestBody(requestBody, new CommonUtil.FileUploadProgressListener(listener)))
-                    .build();
-            int timeout = CommonUtil.getUploadTimeout(envVars);
-            Response execute = new OkHttpClient().newBuilder()
-                    .retryOnConnectionFailure(true)
-                    .readTimeout(timeout, TimeUnit.SECONDS)
-                    .writeTimeout(timeout, TimeUnit.SECONDS)
-                    .connectTimeout(timeout, TimeUnit.SECONDS)
-                    .build()
-                    .newCall(request).execute();
-
-            if (execute.body() == null) {
-                CommonUtil.printMessage(listener, true, "Upload file failed with oss");
-                CommonUtil.printMessage(listener, true, "upload file result is null.");
-                return null;
-            }
-            if(execute.code() == 204){
-                String url = "https://www.pgyer.com/apiv2/app/buildInfo?_api_key="+paramsBeanV2.getApiKey()+"&buildKey="+tokenBean.getData().getKey();
-                times = 0;
-                return uploadResult(url,paramsBeanV2,listener);
-            } else {
-                CommonUtil.printMessage(listener, true, "Upload failed with pgyer api v2!");
-                return null;
-            }
-        } catch (IOException e) {
-            listener.message(true, "pgyer result: " + result);
-            listener.message(true, "ERROR: " + e.getMessage() + "\n");
+        if (uploadFile.act(new PgyerUploadFileHelper(tokenBean.getData().getKey(),
+                tokenBean.getData().getParams().getSignature(),
+                tokenBean.getData().getParams().getX_cos_security_token(),
+                tokenBean.getData().getEndpoint())) != null){
+            String url = "https://www.pgyer.com/apiv2/app/buildInfo?_api_key="+paramsBeanV2.getApiKey()+"&buildKey="+tokenBean.getData().getKey();
+            times = 0;
+            return uploadResult(url,paramsBeanV2,listener);
+        }
+        else {
             return null;
         }
-    }
 
+
+    }
     static boolean bGo = true;
     static Timer timers = null;
     static int delay = 5000;
