@@ -5,19 +5,13 @@ import com.google.gson.reflect.TypeToken;
 import hudson.EnvVars;
 import hudson.FilePath;
 import okhttp3.*;
-import org.apache.commons.io.IOUtils;
 import ren.helloworld.upload2pgyer.helper.CommonUtil;
 import ren.helloworld.upload2pgyer.helper.ProgressRequestBody;
 import ren.helloworld.upload2pgyer.impl.Message;
 
-import javax.swing.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.io.IOException;
-import java.io.InputStream;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class PgyerUploadV2 {
@@ -242,8 +236,7 @@ public class PgyerUploadV2 {
 
     }
     static boolean bGo = true;
-    static Timer timers = null;
-    static int delay = 5000;
+    static int delay = 3000;
     static int times = 0;
     /**
      * Obtain the result of PGYER synchronizing data upload（获取pgyer 同步上传数据结果）
@@ -257,20 +250,15 @@ public class PgyerUploadV2 {
         CommonUtil.printMessage(listener, true, "upload：Wait for the PGYER synchronization result");
         try {
             //同步数据需要3~5秒延迟4秒获取最终同步数据
-            timers = null;
             bGo = true;
-            timers = new Timer(delay, new ActionListener() {
+            Timer timer = new Timer();
+            TimerTask task = new TimerTask() {
                 @Override
-                public void actionPerformed(ActionEvent e) {
-                    if(timers != null){
-                        bGo = false;
-                        timers.stop();
-                        timers = null;
-
-                    }
+                public void run() {
+                    bGo = false;
                 }
-            });
-            timers.start();
+            };
+            timer.schedule(task, delay);
             int i=0;
             while (bGo){
                 i++;
@@ -278,6 +266,8 @@ public class PgyerUploadV2 {
                     CommonUtil.printMessage(listener, true, "upload：Pgyer is synchronizing data……");
                 }
             }
+            CommonUtil.printMessage(listener, true, "timer with delay " + delay+ " end.");
+
             Request request = new Request.Builder().url(url).get().build();
             Response execute = new OkHttpClient().newBuilder()
                     .retryOnConnectionFailure(true)
@@ -287,11 +277,6 @@ public class PgyerUploadV2 {
                     .build()
                     .newCall(request).execute();
 
-            if (execute.body() == null) {
-                CommonUtil.printMessage(listener, true, "Upload file result failed with uploadResult");
-                CommonUtil.printMessage(listener, true, "upload file result is null.");
-                return null;
-            }
             ResponseBody responseBody = execute.body();
             if(responseBody == null){
                 CommonUtil.printMessage(listener, true, "Upload file result failed with uploadResult");
@@ -319,7 +304,7 @@ public class PgyerUploadV2 {
                         times++;
                         CommonUtil.printMessage(listener, true, "upload：Pgyer has not synchronized the results");
                         bGo = true;
-                        delay = 2000;
+//                        delay = 2000;
                         return uploadResult(url, paramsBeanV2, listener);
                     }
                 } else {
