@@ -15,7 +15,7 @@
 
     <groupId>ren.helloworld</groupId>
     <artifactId>upload-pgyer</artifactId>
-    <version>2.3.1-SNAPSHOT</version>
+    <version>2.3.2-SNAPSHOT</version>
     <packaging>hpi</packaging>
     <name>Upload to pgyer</name>
     <description>Upload to pgyer for jenkins plugin</description>
@@ -109,6 +109,13 @@
                     <artifactId>kotlin-stdlib-common</artifactId>
                 </exclusion>
             </exclusions>
+        </dependency>
+
+        <!-- DNS解析库，用于指定自定义DNS服务器 -->
+        <dependency>
+            <groupId>dnsjava</groupId>
+            <artifactId>dnsjava</artifactId>
+            <version>3.6.3</version>
         </dependency>
     </dependencies>
 

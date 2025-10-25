@@ -10,12 +10,118 @@ import ren.helloworld.upload2pgyer.helper.ProgressRequestBody;
 import ren.helloworld.upload2pgyer.impl.Message;
 
 import java.io.IOException;
-import java.util.HashMap;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import org.xbill.DNS.*;
 
 public class PgyerUploadV2 {
     private static final String UPLOAD_URL = CommonUtil.PGYER_HOST + "/apiv2/app/getCOSToken";
+    
+    /**
+     * 自定义DNS解析器，使用指定的稳定DNS服务器
+     */
+    private static class CustomDns implements Dns {
+        // 指定的DNS服务器列表，按优先级排序
+        private static final String[] DNS_SERVERS = {
+            "8.8.8.8",        // Google DNS
+            "8.8.4.4",        // Google DNS 备用
+            "1.1.1.1",        // Cloudflare DNS
+            "114.114.114.114", // 114 DNS
+            "223.5.5.5"       // 阿里DNS
+        };
+        
+        private final Message listener;
+        
+        public CustomDns(Message listener) {
+            this.listener = listener;
+        }
+        
+        @Override
+        public List<InetAddress> lookup(String hostname) throws UnknownHostException {
+            if (hostname == null) {
+                throw new UnknownHostException("hostname == null");
+            }
+            
+            if (listener != null) {
+                CommonUtil.printMessage(listener, true, "开始DNS解析: " + hostname);
+            }
+            
+            // 尝试使用每个指定的DNS服务器进行解析
+            for (String dnsServer : DNS_SERVERS) {
+                try {
+                    if (listener != null) {
+                        CommonUtil.printMessage(listener, true, "尝试使用DNS服务器: " + dnsServer);
+                    }
+                    
+                    List<InetAddress> addresses = resolveWithDnsServer(hostname, dnsServer);
+                    if (addresses != null && !addresses.isEmpty()) {
+                        if (listener != null) {
+                            CommonUtil.printMessage(listener, true, "DNS解析成功，使用服务器: " + dnsServer);
+                            for (InetAddress address : addresses) {
+                                CommonUtil.printMessage(listener, true, "  -> " + address.getHostAddress());
+                            }
+                        }
+                        return addresses;
+                    }
+                } catch (Exception e) {
+                    if (listener != null) {
+                        CommonUtil.printMessage(listener, true, "DNS服务器 " + dnsServer + " 解析失败: " + e.getMessage());
+                    }
+                    // 当前DNS服务器失败，继续尝试下一个
+                    continue;
+                }
+            }
+            
+            // 如果所有指定DNS服务器都失败，回退到系统DNS
+            if (listener != null) {
+                CommonUtil.printMessage(listener, true, "所有指定DNS服务器都失败，尝试使用系统DNS");
+            }
+            try {
+                return Dns.SYSTEM.lookup(hostname);
+            } catch (UnknownHostException e) {
+                if (listener != null) {
+                    CommonUtil.printMessage(listener, true, "系统DNS解析也失败: " + e.getMessage());
+                }
+                throw new UnknownHostException("Unable to resolve hostname: " + hostname + 
+                    " with any of the specified DNS servers: " + Arrays.toString(DNS_SERVERS));
+            }
+        }
+        
+        /**
+         * 使用指定的DNS服务器解析域名
+         */
+        private List<InetAddress> resolveWithDnsServer(String hostname, String dnsServer) throws UnknownHostException {
+            try {
+                // 创建DNS解析器，指定DNS服务器
+                SimpleResolver resolver = new SimpleResolver(dnsServer);
+                resolver.setTimeout(5); // 设置5秒超时
+                
+                // 执行A记录查询
+                Lookup lookup = new Lookup(hostname, Type.A);
+                lookup.setResolver(resolver);
+                Record[] records = lookup.run();
+                
+                if (records == null || records.length == 0) {
+                    return null;
+                }
+                
+                List<InetAddress> addresses = new ArrayList<>();
+                for (Record record : records) {
+                    if (record instanceof ARecord) {
+                        ARecord aRecord = (ARecord) record;
+                        addresses.add(aRecord.getAddress());
+                    }
+                }
+                
+                return addresses;
+                
+            } catch (Exception e) {
+                throw new UnknownHostException("DNS resolution failed with server " + dnsServer + ": " + e.getMessage());
+            }
+        }
+    }
     public static void main(String[] args) {
 
         Message listener = new Message() {
@@ -31,6 +137,30 @@ public class PgyerUploadV2 {
             return;
         }
 //        upload2Pgyer(null, false, paramsBeanV2, listener);
+    }
+    
+    /**
+     * 测试DNS解析功能
+     */
+    public static void testDnsResolution() {
+        System.out.println("Testing DNS resolution with custom DNS servers...");
+        Message testListener = new Message() {
+            @Override
+            public void message(boolean needTag, String message) {
+                System.out.println((needTag ? "[TEST] " : "") + message);
+            }
+        };
+        CustomDns customDns = new CustomDns(testListener);
+        
+        try {
+            List<InetAddress> addresses = customDns.lookup("www.pgyer.com");
+            System.out.println("Successfully resolved www.pgyer.com:");
+            for (InetAddress address : addresses) {
+                System.out.println("  - " + address.getHostAddress());
+            }
+        } catch (UnknownHostException e) {
+            System.err.println("DNS resolution failed: " + e.getMessage());
+        }
     }
 
     /**
@@ -150,6 +280,7 @@ public class PgyerUploadV2 {
                     .readTimeout(timeout, TimeUnit.SECONDS)
                     .writeTimeout(timeout, TimeUnit.SECONDS)
                     .connectTimeout(timeout, TimeUnit.SECONDS)
+                    .dns(new CustomDns(listener))  // 使用自定义DNS解析器，传入listener用于日志输出
                     .build()
                     .newCall(request).execute();
 
@@ -220,7 +351,6 @@ public class PgyerUploadV2 {
             CommonUtil.printMessage(listener, true, "upload file size: " + CommonUtil.convertFileSize(uploadFile.length()));
         }
 
-        String result = "";
         if (uploadFile.act(new PgyerUploadFileHelper(tokenBean.getData().getKey(),
                 tokenBean.getData().getParams().getSignature(),
                 tokenBean.getData().getParams().getX_cos_security_token(),
@@ -274,6 +404,7 @@ public class PgyerUploadV2 {
                     .readTimeout(300, TimeUnit.SECONDS)
                     .writeTimeout(300, TimeUnit.SECONDS)
                     .connectTimeout(300, TimeUnit.SECONDS)
+                    .dns(new CustomDns(listener))  // 使用自定义DNS解析器，传入listener用于日志输出
                     .build()
                     .newCall(request).execute();
 
